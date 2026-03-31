@@ -1,10 +1,13 @@
 from datetime import time
-
-
+import pandas as pd
+from risk_engine import RiskManager
 import numpy as np
+
+
+
 class ExecutionEngine:
 
-    def __init__(self, data, initial_capital, lot, brokerage, slippage, rr=1):
+    def __init__(self, data, initial_capital, lot, brokerage, slippage, rr=1,per_trade_risk=1000, max_daily_loss=3000):
 
         self.data = data
         self.capital = initial_capital
@@ -21,29 +24,36 @@ class ExecutionEngine:
         self.daily_trade_log = []
         self.equity = []
 
+        self.risk = RiskManager(per_trade_risk, max_daily_loss)
+
     def run(self):
 
         data = self.data.copy()
 
+        # STATE VARIABLES
+
+        long_position = 0
+        short_position = 0
+
+        long_entry_price = 0
+        short_entry_price = 0
+
+        long_target = 0
+        long_stoploss = 0
+
+        short_target = 0
+        short_stoploss = 0
+        long_mad = 0
+        short_mad =0
 
         for day, day_df in data.groupby(data.index.date):
+
+            self.risk.reset_day()
+
             daily_long_trade_number = 0
             daily_short_trade_number = 0
             daily_trade_number = 0
 
-            # STATE VARIABLES
-
-            long_position = 0
-            short_position = 0
-
-            long_entry_price = 0
-            short_entry_price = 0
-
-            long_target = 0
-            long_stoploss = 0
-
-            short_target = 0
-            short_stoploss = 0
 
             # LOOP
             for index, row in day_df.iterrows():
@@ -59,9 +69,10 @@ class ExecutionEngine:
                 current_time = index.time()
 
                 # ENTRY LONG
-                if long_position == 0 and low < lower and current_time < self.target_time and not np.isnan(mad):
-
-                    long_position = 1
+                if long_position == 0 and low < lower and current_time < self.target_time and not np.isnan(mad) :
+                    if not self.risk.can_take_trade():
+                        continue
+                    long_mad = row['mad'] / close
                     long_entry_price = lower + self.slippage
                     daily_long_trade_number += 1
                     daily_trade_number += 1
@@ -69,17 +80,28 @@ class ExecutionEngine:
                     long_target = (long_entry_price + (mad * self.rr))
                     long_stoploss = (long_entry_price - mad)
 
+                    qty = self.risk.get_position_size(long_entry_price, long_stoploss, self.lot)
+                    if qty == 0:
+                        continue
+                    long_position = 1
+
 
                 # ENTRY SHORT
                 elif short_position == 0 and high > upper and current_time < self.target_time and not np.isnan(mad):
-
-                    short_position = 1
+                    if not self.risk.can_take_trade():
+                        continue
+                    short_mad = row['mad'] / close
                     short_entry_price = upper - self.slippage
                     daily_short_trade_number += 1
                     daily_trade_number += 1
 
                     short_target = (short_entry_price - (mad * self.rr))
                     short_stoploss = (short_entry_price + mad)
+
+                    qty = self.risk.get_position_size(long_entry_price, long_stoploss, self.lot)
+                    if qty == 0:
+                        continue
+                    short_position = 1
 
 
                 # EXIT LONG
@@ -99,7 +121,7 @@ class ExecutionEngine:
                                                     'stoploss': long_stoploss,
                                                     'status': 'target',
                                                     'pnl': pnl,
-                                                    'mad': mad
+                                                    'mad': long_mad
                                                     })
 
                         self.daily_trade_log.append({'date' : date,
@@ -109,6 +131,7 @@ class ExecutionEngine:
                                                      })
 
                         self.equity.append(self.capital)
+                        self.risk.update_pnl(pnl)
 
 
 
@@ -128,7 +151,7 @@ class ExecutionEngine:
                                                     'stoploss': long_stoploss,
                                                     'status': 'time exit',
                                                     'pnl': pnl,
-                                                    'mad': mad
+                                                    'mad': long_mad
                                                     })
 
                         self.daily_trade_log.append({'date': date,
@@ -138,6 +161,7 @@ class ExecutionEngine:
                                                      })
 
                         self.equity.append(self.capital)
+                        self.risk.update_pnl(pnl)
 
 
 
@@ -156,7 +180,7 @@ class ExecutionEngine:
                                                     'stoploss': long_stoploss,
                                                     'status': 'stoploss',
                                                     'pnl': pnl,
-                                                    'mad': mad
+                                                    'mad': long_mad
                                                     })
 
                         self.daily_trade_log.append({'date': date,
@@ -166,6 +190,7 @@ class ExecutionEngine:
                                                      })
 
                         self.equity.append(self.capital)
+                        self.risk.update_pnl(pnl)
 
 
 
@@ -186,7 +211,7 @@ class ExecutionEngine:
                                                     'stoploss': short_stoploss,
                                                     'status': 'target',
                                                     'pnl': pnl,
-                                                    'mad': mad
+                                                    'mad': short_mad
                                                     })
 
                         self.daily_trade_log.append({'date': date,
@@ -196,6 +221,7 @@ class ExecutionEngine:
                                                      })
 
                         self.equity.append(self.capital)
+                        self.risk.update_pnl(pnl)
 
 
 
@@ -215,7 +241,7 @@ class ExecutionEngine:
                                                      'stoploss': short_stoploss,
                                                      'status': 'time exit',
                                                      'pnl': pnl,
-                                                     'mad': mad
+                                                     'mad': short_mad
                                                      })
 
                         self.daily_trade_log.append({'date': date,
@@ -225,6 +251,7 @@ class ExecutionEngine:
                                                      })
 
                         self.equity.append(self.capital)
+                        self.risk.update_pnl(pnl)
 
 
 
@@ -244,7 +271,7 @@ class ExecutionEngine:
                                                      'stoploss': short_stoploss,
                                                      'status': 'stoploss',
                                                      'pnl': pnl,
-                                                     'mad': mad
+                                                     'mad': short_mad
                                                      })
 
                         self.daily_trade_log.append({'date': date,
@@ -254,9 +281,49 @@ class ExecutionEngine:
                                                      })
 
                         self.equity.append(self.capital)
+                        self.risk.update_pnl(pnl)
 
 
 
 
         print(self.capital)
         return self.capital , self.long_trade_log, self.short_trade_log, self.equity
+
+def analyze_mad_by_outcome(long_log, short_log):
+
+
+
+    # convert to dataframe
+    long_df = pd.DataFrame(long_log)
+    short_df = pd.DataFrame(short_log)
+
+    # safety check
+    if long_df.empty:
+        print("No trades available long side")
+        return
+
+    if short_df.empty:
+        print("No trades available in short side")
+
+    # filter by outcome
+    long_target_trades = long_df[long_df['status'] == 'target']
+    long_stoploss_trades = long_df[long_df['status'] == 'stoploss']
+
+    short_target_trades = short_df[short_df['status'] == 'target']
+    short_stoploss_trades = short_df[short_df['status'] == 'stoploss']
+
+    # calculate means
+    long_target_mad_mean = long_target_trades['mad'].mean()
+    long_stoploss_mad_mean = long_stoploss_trades['mad'].mean()
+
+    short_target_mad_mean = short_target_trades['mad'].mean()
+    short_stoploss_mad_mean = short_stoploss_trades['mad'].mean()
+
+    print("MAD Analysis:")
+    print(f"LONG Mean MAD (TARGET trades): {long_target_mad_mean}")
+    print(f"LONG Mean MAD (STOPLOSS trades): {long_stoploss_mad_mean}")
+
+    print(f"SHORT Mean MAD (TARGET trades): {short_target_mad_mean}")
+    print(f"SHORT mean MAD (STOPLOSS trades): {short_stoploss_mad_mean}")
+
+    return long_target_mad_mean, long_stoploss_mad_mean, short_target_mad_mean, short_stoploss_mad_mean
