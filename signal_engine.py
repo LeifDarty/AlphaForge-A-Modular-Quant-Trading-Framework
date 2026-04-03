@@ -9,10 +9,10 @@ class SignalEngine:
 
         self.data['signal'] = np.select(
             [
-                (self.data['close'].shift(1) > self.data['lower']) &
+                (self.data['open'].shift(1) > self.data['lower']) &
                 (self.data['low'] < self.data['lower']),
 
-                (self.data['close'].shift(1) < self.data['upper']) &
+                (self.data['open'].shift(1) < self.data['upper']) &
                 (self.data['high'] > self.data['upper'])
             ],
             [1, -1],
