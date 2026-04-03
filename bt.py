@@ -98,7 +98,7 @@ class ExecutionEngine:
                     short_target = (short_entry_price - (mad * self.rr))
                     short_stoploss = (short_entry_price + mad)
 
-                    qty = self.risk.get_position_size(long_entry_price, long_stoploss, self.lot)
+                    qty = self.risk.get_position_size(short_entry_price, short_stoploss, self.lot)
                     if qty == 0:
                         continue
                     short_position = 1
