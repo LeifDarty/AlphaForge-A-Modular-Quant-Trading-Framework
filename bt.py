@@ -25,6 +25,7 @@ class ExecutionEngine:
         self.equity = []
 
         self.risk = RiskManager(per_trade_risk, max_daily_loss)
+        
 
     def run(self):
 
@@ -45,6 +46,9 @@ class ExecutionEngine:
         short_stoploss = 0
         long_mad = 0
         short_mad =0
+        
+        long_qty = 0
+        short_qty = 0
 
         for day, day_df in data.groupby(data.index.date):
 
@@ -80,8 +84,8 @@ class ExecutionEngine:
                     long_target = (long_entry_price + (mad * self.rr))
                     long_stoploss = (long_entry_price - mad)
 
-                    qty = self.risk.get_position_size(long_entry_price, long_stoploss, self.lot)
-                    if qty == 0:
+                    long_qty = self.risk.get_position_size(long_entry_price, long_stoploss, self.lot)
+                    if long_qty == 0:
                         continue
                     long_position = 1
 
@@ -98,8 +102,8 @@ class ExecutionEngine:
                     short_target = (short_entry_price - (mad * self.rr))
                     short_stoploss = (short_entry_price + mad)
 
-                    qty = self.risk.get_position_size(short_entry_price, short_stoploss, self.lot)
-                    if qty == 0:
+                    short_qty = self.risk.get_position_size(short_entry_price, short_stoploss, self.lot)
+                    if short_qty == 0:
                         continue
                     short_position = 1
 
@@ -109,7 +113,7 @@ class ExecutionEngine:
                     # target
                     if high >= long_target:
                         long_exit_price = long_target - self.slippage
-                        pnl = ((long_exit_price - long_entry_price) * self.lot) - self.brokerage
+                        pnl = ((long_exit_price - long_entry_price) * long_qty) - self.brokerage
                         self.capital += pnl
                         long_position = 0
 
@@ -139,7 +143,7 @@ class ExecutionEngine:
                     elif current_time >= self.target_time:
 
                         long_time_exit_price = close - self.slippage
-                        pnl = ((long_time_exit_price - long_entry_price) * self.lot) - self.brokerage
+                        pnl = ((long_time_exit_price - long_entry_price) * long_qty) - self.brokerage
                         self.capital += pnl
                         long_position = 0
 
@@ -168,7 +172,7 @@ class ExecutionEngine:
                     # stoploss
                     elif low <= long_stoploss:
                         long_exit_price = long_stoploss - self.slippage
-                        pnl = ((long_exit_price - long_entry_price) * self.lot) - self.brokerage
+                        pnl = ((long_exit_price - long_entry_price) * long_qty) - self.brokerage
                         self.capital += pnl
                         long_position = 0
 
@@ -199,7 +203,7 @@ class ExecutionEngine:
                     # target
                     if low <= short_target:
                         short_exit_price = short_target + self.slippage
-                        pnl = ((short_entry_price - short_exit_price) * self.lot) - self.brokerage
+                        pnl = ((short_entry_price - short_exit_price) * short_qty) - self.brokerage
                         self.capital += pnl
                         short_position = 0
 
@@ -229,7 +233,7 @@ class ExecutionEngine:
                     elif current_time >= self.target_time:
 
                         short_time_exit_price = close + self.slippage
-                        pnl = ((short_entry_price - short_time_exit_price) * self.lot) - self.brokerage
+                        pnl = ((short_entry_price - short_time_exit_price) * short_qty) - self.brokerage
                         self.capital += pnl
                         short_position = 0
 
@@ -259,7 +263,7 @@ class ExecutionEngine:
                     elif high >= short_stoploss:
 
                         short_exit_price = short_stoploss + self.slippage
-                        pnl = ((short_entry_price - short_exit_price) * self.lot) - self.brokerage
+                        pnl = ((short_entry_price - short_exit_price) * short_qty) - self.brokerage
                         self.capital += pnl
                         short_position = 0
 
